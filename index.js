@@ -29,20 +29,6 @@ async function run() {
       .db("contactManagement")
       .collection("contacts");
 
-    // create contact
-    app.post("/contacts", async (req, res) => {
-      const contact = req.body;
-      const query = { phone: contact.phone };
-      const existingContact = await contactsCollection.findOne(query);
-
-      if (existingContact) {
-        return res.send({ message: "Contact already exists" });
-      }
-
-      const result = await contactsCollection.insertOne(contact);
-      res.send(result);
-    });
-
     // get all contacts
     app.get("/contacts", async (req, res) => {
       const result = await contactsCollection.find().toArray();
@@ -55,6 +41,20 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const result = await contactsCollection.findOne(query);
       res.json(result);
+    });
+
+    // create contact
+    app.post("/contacts", async (req, res) => {
+      const contact = req.body;
+      const query = { phone: contact.phone };
+      const existingContact = await contactsCollection.findOne(query);
+
+      if (existingContact) {
+        return res.send({ message: "Contact already exists" });
+      }
+
+      const result = await contactsCollection.insertOne(contact);
+      res.send(result);
     });
 
     // update contact
@@ -79,6 +79,17 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const result = await contactsCollection.deleteOne(query);
       res.json(result);
+    });
+
+    // contact search by name
+    app.get("/contactSearchByName/:text", async (req, res) => {
+      const searchText = req.params.text;
+      const result = await contactsCollection
+        .find({
+          $or: [{ name: { $regex: searchText, $options: "i" } }],
+        })
+        .toArray();
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
