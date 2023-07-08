@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
 require("dotenv").config();
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -9,76 +9,81 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// data
-const contacts = require("./data/contacts.json");
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.s92qhby.mongodb.net/?retryWrites=true&w=majority`;
 
-app.put("/contacts/:id", (req, res) => {
-  const id = req.params.id;
-  const contactInfo = req.body;
-  const { name, email, phone } = contactInfo;
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
+});
 
-  fs.readFile("./data/contacts.json", (err, data) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Error saving data" });
-    }
+async function run() {
+  try {
+    // Connect the client to the server	(optional starting in v4.7)
+    await client.connect();
 
-    const jsonData = JSON.parse(data);
-    // jsonData.push(contactInfo);
+    const contactsCollection = client
+      .db("contactManagement")
+      .collection("contacts");
 
-    // Find the item in the array based on the provided ID
-    const itemIndex = jsonData.findIndex((item) => item.phone === id);
+    // create contact
+    app.post("/contacts", async (req, res) => {
+      const contact = req.body;
+      const query = { phone: contact.phone };
+      const existingContact = await contactsCollection.findOne(query);
 
-    // Check if the item exists
-    if (itemIndex === -1) {
-      return res.status(404).json({ message: "Item not found" });
-    }
-
-    // Update the item with the new data
-    jsonData[itemIndex].name = name;
-    jsonData[itemIndex].phone = phone;
-    jsonData[itemIndex].email = email;
-
-    // Write the updated data back to the JSON file
-    fs.writeFile("./data/contacts.json", JSON.stringify(jsonData), (err) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ message: "Error writing data" });
+      if (existingContact) {
+        return res.send({ message: "Contact already exists" });
       }
 
-      res.status(200).json({ message: "Data updated successfully" });
+      const result = await contactsCollection.insertOne(contact);
+      res.send(result);
     });
-  });
-});
 
-// get all contacts
-app.get("/contacts", (req, res) => {
-  res.send(contacts);
-});
-
-// add contact API
-app.post("/contacts", async (req, res) => {
-  const contactInfo = req.body;
-
-  fs.readFile("./data/contacts.json", (err, data) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Error saving data" });
-    }
-
-    const jsonData = JSON.parse(data);
-    jsonData.push(contactInfo);
-
-    fs.writeFile("./data/contacts.json", JSON.stringify(jsonData), (err) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ message: "Error saving data" });
-      }
-
-      res.status(200).json({ message: "Data submitted successfully" });
+    // get all contacts
+    app.get("/contacts", async (req, res) => {
+      const result = await contactsCollection.find().toArray();
+      res.send(result);
     });
-  });
-});
+
+    // get specific contact
+    app.get("/contacts/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await contactsCollection.findOne(query);
+      res.json(result);
+    });
+
+    // update contact
+    app.put("/contacts/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedContact = req.body;
+      const contact = {
+        $set: {
+          name: updatedContact.name,
+          phone: updatedContact.phone,
+          email: updatedContact.email,
+        },
+      };
+      const result = await contactsCollection.updateOne(filter, contact);
+      res.send(result);
+    });
+
+    // Send a ping to confirm a successful connection
+    await client.db("admin").command({ ping: 1 });
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
+  } finally {
+    // Ensures that the client will close when you finish/error
+    // await client.close();
+  }
+}
+run().catch(console.dir);
 
 app.get("/", (req, res) => {
   res.send("contact management server running");
