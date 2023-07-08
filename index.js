@@ -92,6 +92,20 @@ async function run() {
       res.send(result);
     });
 
+    // sort by name
+    app.get("/sortByName", async (req, res) => {
+      const sortField = req.query.sortField || "name";
+      const sortOrder = req.query.sortOrder || 1;
+
+      // Fetch items from MongoDB and apply sorting
+      const result = await contactsCollection
+        .find()
+        .sort({ [sortField]: parseInt(sortOrder) })
+        .toArray();
+
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
